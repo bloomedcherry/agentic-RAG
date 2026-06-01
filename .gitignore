@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.conda/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Type check / lint caches
+.mypy_cache/
+.ruff_cache/
+.pyre/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# FastAPI / Streamlit
+.streamlit/secrets.toml
+
+# Logs and traces
+logs/
+traces/
+*.log
+*.jsonl
+
+# Local data and generated indexes
+data/raw/
+data/processed/
+data/indexes/
+data/vector_store/
+artifacts/
+outputs/
+*.db
+*.sqlite
+*.sqlite3
+
+# Model and embedding caches
+models/
+checkpoints/
+.cache/
+sentence_transformers/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
