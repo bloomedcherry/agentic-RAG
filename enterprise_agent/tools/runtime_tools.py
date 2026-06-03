@@ -65,7 +65,11 @@ class QuerySqlTool(BaseTool):
             )
             bindings = ()
         else:
-            return ToolResult(status="error", error=f"unsupported query_type: {query_type}")
+            return ToolResult(
+                status="error",
+                error=f"unsupported query_type: {query_type}",
+                error_type="sql_error",
+            )
 
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -99,6 +103,7 @@ class WorkflowCheckTool(BaseTool):
         return ToolResult(
             status="error",
             error=f"no matching workflow rule for {workflow_type} amount={amount}",
+            error_type="workflow_error",
         )
 
 

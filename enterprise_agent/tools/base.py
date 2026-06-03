@@ -18,6 +18,7 @@ class ToolResult:
     status: str
     output: dict[str, Any] | None = None
     error: str | None = None
+    error_type: str | None = None
     latency: float = 0.0
 
 
@@ -57,6 +58,7 @@ class BaseTool:
                 status="error",
                 output=None,
                 error=str(exc),
+                error_type="tool_error",
                 latency=time.perf_counter() - start,
             )
 

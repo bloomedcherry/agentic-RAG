@@ -248,3 +248,184 @@ pytest enterprise_agent/tests/test_permission.py enterprise_agent/tests/test_ver
 阻塞问题：
 下一步：
 ```
+
+## 6. M3 执行结果
+
+日期：2026-06-03
+执行人：Codex
+
+### 完成内容
+
+已在 M2 LangGraph Runtime 基础上完成 M3 最小闭环：
+
+```text
+用户 query
+-> Runtime.run()
+-> LangGraph planner/router/tool_executor/context_builder/answer_generator
+-> 工具执行前权限检查
+-> Verifier
+-> Retry/Fallback/Refusal
+-> JSONL Trace
+-> CLI 输出
+```
+
+新增文件：
+
+```text
+enterprise_agent/agent/permission.py
+enterprise_agent/agent/verifier.py
+enterprise_agent/agent/retry.py
+enterprise_agent/agent/trace.py
+enterprise_agent/tests/test_permission.py
+enterprise_agent/tests/test_verifier.py
+enterprise_agent/tests/test_trace.py
+enterprise_agent/tests/test_runtime_m3.py
+```
+
+修改文件：
+
+```text
+enterprise_agent/agent/graph.py
+enterprise_agent/agent/runtime.py
+enterprise_agent/agent/state.py
+enterprise_agent/tools/base.py
+enterprise_agent/tools/runtime_tools.py
+README.md
+```
+
+### Permission
+
+已实现三类角色：
+
+```text
+employee
+manager
+admin
+```
+
+权限矩阵：
+
+```text
+search_kb        employee manager admin
+generate_report employee manager admin
+workflow_check  employee manager admin
+parse_doc        employee manager admin
+query_sql        manager  admin
+```
+
+`employee` 调用 `query_sql` 时不会执行工具，Runtime 写入：
+
+```python
+{"name": "query_sql", "status": "permission_denied"}
+```
+
+同时写入结构化错误：
+
+```python
+{"type": "permission_denied", "message": "当前角色无权调用 query_sql"}
+```
+
+### Verifier
+
+已实现规则：
+
+```text
+RAG 任务 retrieved_docs 为空 -> retrieval_empty
+需要引用但 answer 不包含 来源/source/chunk_id -> missing_citation
+query_sql 工具 status != success -> sql_error
+permission_denied 后仍执行工具 -> permission_violation
+权限拒绝 -> permission_denied
+报告生成输出不含 Markdown 标题 -> format_error
+```
+
+Verifier 输出：
+
+```python
+{
+    "pass": bool,
+    "issues": [{"type": "...", "message": "..."}],
+    "suggested_action": "..."
+}
+```
+
+### Retry / Fallback
+
+已实现一次性处理策略，避免循环：
+
+```text
+missing_citation -> retry_with_citation
+retrieval_empty -> fallback_insufficient_evidence
+sql_error -> fallback_without_data_claim
+permission_denied -> refusal
+format_error -> retry_with_format
+permission_violation -> refusal
+```
+
+当前 M3 不重新执行工具，只对答案做一次受控重写或拒绝：
+
+```text
+retry_with_citation：补充来源行
+fallback_insufficient_evidence：输出证据不足
+fallback_without_data_claim：不生成数据结论
+refusal：明确拒绝并说明原因
+retry_with_format：补 Markdown 标题
+```
+
+### Trace
+
+每次 `Runtime.run()` 结束后调用 `write_trace()`，默认写入：
+
+```text
+enterprise_agent/logs/traces.jsonl
+```
+
+trace 字段包含：
+
+```text
+task_id
+timestamp
+query
+user_role
+task_type
+plan
+tool_calls
+retrieved_docs
+tool_outputs
+answer
+verifier_result
+success
+latency
+error_type
+```
+
+说明：`traces.jsonl` 是本地运行产物，受 `.gitignore` 的 `*.jsonl` 规则忽略；测试通过 `Runtime(trace_path=...)` 注入临时 trace 路径。
+
+### 验证结果
+
+已通过 M3 目标测试：
+
+```bash
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m pytest enterprise_agent/tests/test_permission.py enterprise_agent/tests/test_verifier.py enterprise_agent/tests/test_trace.py enterprise_agent/tests/test_runtime_m3.py -q
+```
+
+结果：
+
+```text
+11 passed in 1.06s
+```
+
+已通过当前全量测试：
+
+```bash
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m pytest enterprise_agent/tests -q
+```
+
+结果：
+
+```text
+42 passed in 7.33s
+```
+
+### 当前边界
+
+M3 仍保持规则型实现，不接真实 LLM、生产级 RBAC、字段级脱敏、LLM-as-Judge 或人工审批流。这些进入后续 M4 或产品化阶段。

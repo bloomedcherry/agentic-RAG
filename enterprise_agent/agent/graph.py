@@ -5,6 +5,7 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from enterprise_agent.agent.context_builder import ContextBuilder
+from enterprise_agent.agent.permission import check_permission
 from enterprise_agent.agent.planner import Planner
 from enterprise_agent.agent.router import Router
 from enterprise_agent.agent.state import AgentState
@@ -31,15 +32,28 @@ def build_graph(registry: ToolRegistry):
 
         for tool_name in state.get("selected_tools", []):
             tool = registry.get(tool_name)
+            permission = check_permission(state.get("role", "employee"), tool)
+            if not permission["allowed"]:
+                tool_calls.append({"name": tool_name, "status": permission["error_type"]})
+                errors.append({"type": permission["error_type"], "message": permission["message"]})
+                break
             result = tool.execute(**_tool_args(tool_name, state, tool_outputs))
-            tool_calls.append({"name": tool_name, "status": result.status})
+            tool_call = {"name": tool_name, "status": result.status}
+            if result.error_type:
+                tool_call["error_type"] = result.error_type
+            tool_calls.append(tool_call)
             if result.status == "success":
                 output = result.output or {}
                 tool_outputs[tool_name] = output
                 if tool_name == "search_kb":
                     retrieved_docs = output.get("documents") or []
             else:
-                errors.append(result.error or f"{tool_name} failed")
+                errors.append(
+                    {
+                        "type": result.error_type or "tool_error",
+                        "message": result.error or f"{tool_name} failed",
+                    }
+                )
 
         return {
             **state,

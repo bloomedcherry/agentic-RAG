@@ -16,5 +16,7 @@ class AgentState(TypedDict, total=False):
     tool_outputs: dict[str, dict[str, Any]]
     context: str
     answer: str
-    errors: list[str]
+    errors: list[Any]
+    verifier_result: dict[str, Any]
+    trace_path: str
     latency: float
