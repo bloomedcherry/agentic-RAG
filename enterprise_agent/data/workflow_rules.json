@@ -1,0 +1,14 @@
+{
+  "purchase": [
+    {
+      "max_amount": 5000,
+      "approval_required": false,
+      "approver": null
+    },
+    {
+      "min_amount": 5000,
+      "approval_required": true,
+      "approver": "部门经理"
+    }
+  ]
+}
