@@ -1,0 +1,52 @@
+[
+  {
+    "name": "wku_employee_handbook_pdf",
+    "doc_type": "policy",
+    "url": "https://www.wku.edu.cn/sites/wku.sit.site1.drupalagile.com/files/2023-09/%E5%91%98%E5%B7%A5%E6%89%8B%E5%86%8C%EF%BC%882018.03%EF%BC%89.pdf",
+    "filename": "pdf/policies/wku_employee_handbook.pdf"
+  },
+  {
+    "name": "smu_contract_worker_handbook_html",
+    "doc_type": "policy",
+    "url": "https://portal.smu.edu.cn/zwc/info/1009/1598.htm",
+    "filename": "html/policies/smu_contract_worker_handbook.html"
+  },
+  {
+    "name": "beijing_procurement_tender_pdf",
+    "doc_type": "workflow",
+    "url": "https://kfqgw.beijing.gov.cn/zwgkkfq/zdlyxxgk/zfcg/202502/P020250219585161464555.pdf",
+    "filename": "pdf/workflows/beijing_procurement_tender.pdf"
+  },
+  {
+    "name": "shanghai_changning_meeting_minutes_pdf",
+    "doc_type": "meeting",
+    "url": "https://zwgk.shcn.gov.cn/xxgk/zfhy-zw/2024/15/71454/4e11668d9dd240e79ef999a71b081550.pdf",
+    "filename": "pdf/meetings/shanghai_changning_meeting_minutes.pdf"
+  },
+  {
+    "name": "fangcheng_meeting_minutes_page",
+    "doc_type": "meeting",
+    "url": "https://www.fangcheng.gov.cn/2023/03-24/629570.html",
+    "filename": "html/meetings/fangcheng_meeting_minutes_page.html",
+    "download_attachments": true
+  },
+  {
+    "name": "lingbao_project_meeting_html",
+    "doc_type": "project",
+    "url": "https://www.lingbao.gov.cn/16119/616958784/1875034.html",
+    "filename": "html/projects/lingbao_project_meeting.html"
+  },
+  {
+    "name": "zibo_contract_templates_page",
+    "doc_type": "contract",
+    "url": "https://msa.zibo.gov.cn/art/2021/3/11/art_15071_2091575.html",
+    "filename": "html/contracts/zibo_contract_templates_page.html",
+    "download_attachments": true
+  },
+  {
+    "name": "jiangyong_procurement_performance_report_html",
+    "doc_type": "report",
+    "url": "https://www.jiangyong.gov.cn/jxpj/202212/55b7c356e8e64f249348c24e110497be.shtml",
+    "filename": "html/reports/jiangyong_procurement_performance_report.html"
+  }
+]

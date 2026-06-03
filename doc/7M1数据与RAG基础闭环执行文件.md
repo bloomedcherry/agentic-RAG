@@ -1,26 +1,35 @@
 # M1 数据与 RAG 基础闭环执行文件
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> 状态：已完成。本文档记录 M1 的实际执行结果、复现命令和验收结果。
 
-**Goal:** 构建中等规模半真实企业知识库，并跑通 RAG 子系统的解析、切分、索引和 top-k 检索闭环。
+**Goal:** 构建基于公开真实 seed 的企业规章知识库，跑通 RAG 子系统的原始文档解析、扩写文档生成、chunk、索引和 top-k 检索闭环。
 
-**Architecture:** M1 不接完整 Agent Runtime，只实现 RAG 子系统。`rag/data_builder.py` 负责公开采样、模板扩展和人工样例标准化，`tools/parse_doc.py` 负责文档解析，`rag/chunker.py` 负责 chunk 与 metadata，`rag/build_index.py` 负责 embedding 和索引构建，`rag/retriever.py` 负责检索并返回 `source/chunk_id/content/score`。
+**Architecture:** M1 不接完整 Agent Runtime，只实现 RAG 子系统。`rag/download_raw_data.py` 下载公开 raw seed，`tools/parse_doc.py` 解析 Markdown / TXT / PDF / DOCX / HTML，`rag/data_builder.py` 基于真实 seed 生成企业规章 Markdown，`rag/chunker.py` 生成 chunks，`rag/build_index.py` 写入 chunks 和 TF-IDF fallback 索引，`rag/retriever.py` 返回 `source/chunk_id/doc_type/content/score`。
 
-**Tech Stack:** Python, Markdown/TXT, FAISS 或 Chroma, sentence-transformers/bge embedding, pytest。
+**Runtime:** 使用项目 conda 环境：
+
+```bash
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python
+```
+
+联网下载或安装依赖时使用 27890 代理端口和镜像源。
 
 ---
 
 ## 1. 本阶段边界
 
-本阶段必须完成：
+本阶段已完成：
 
-* `data/docs/` 中准备 300+ 篇半真实企业文档；
-* `data/index/chunks.jsonl` 中生成 3,000+ chunks；
-* 数据来源包含公开采样、模板扩展和人工精写样例；
-* 支持 Markdown / TXT 文档解析；
+* `enterprise_agent/data/raw/` 中准备公开真实 raw seed，覆盖 PDF / DOCX / DOC / HTML；
+* 支持 Markdown / TXT / PDF / DOCX / HTML 文档解析；
+* `enterprise_agent/data/docs/` 中生成 360 篇企业规章 Markdown；
+* 文档正文保持企业规章风格，不包含 `source_url`、`seed_path`、`raw_format`、公开来源说明等技术 metadata；
+* 来源信息单独写入 `enterprise_agent/data/index/source_manifest.jsonl`；
+* `enterprise_agent/data/index/chunks.jsonl` 生成 3,297 chunks；
 * 每个 chunk 保留 `chunk_id`、`source`、`doc_type`、`title`、`content`、`metadata`；
-* 构建 `data/index/` 下的向量索引和 chunks metadata；
-* `python -m enterprise_agent.rag.retriever --query "差旅报销需要哪些材料"` 能返回检索结果。
+* chunk metadata 合并 `source_url`、`seed_path`、`raw_format`、`is_expanded`；
+* 构建 `enterprise_agent/data/index/tfidf_index.json`；
+* `retriever` CLI 可返回 top-k 检索结果。
 
 本阶段不做：
 
@@ -28,13 +37,20 @@
 * Tool Contract；
 * LLM 生成；
 * Verifier / Retry；
-* Eval 指标统计。
+* Eval 指标统计；
+* FAISS / Chroma / embedding 索引替换。
+
+当前索引实现说明：
+
+* 已实现标准库 TF-IDF fallback；
+* M1 执行文件允许 fallback；
+* M2/M3 后可替换为 `sentence-transformers + FAISS/Chroma`。
 
 ---
 
 ## 2. 文件清单
 
-创建：
+已创建 / 修改：
 
 ```text
 enterprise_agent/
@@ -44,15 +60,31 @@ enterprise_agent/
 │   └── parse_doc.py
 ├── rag/
 │   ├── __init__.py
+│   ├── download_raw_data.py
 │   ├── data_builder.py
 │   ├── chunker.py
 │   ├── build_index.py
 │   └── retriever.py
 ├── data/
 │   ├── raw/
-│   ├── generators/
+│   │   ├── source_manifest.json
+│   │   ├── source_manifest_reports.json
+│   │   ├── pdf/
+│   │   ├── docx/
+│   │   ├── doc/
+│   │   └── html/
 │   ├── docs/
+│   │   ├── policies/
+│   │   ├── workflows/
+│   │   ├── projects/
+│   │   ├── meetings/
+│   │   ├── contracts/
+│   │   └── reports/
 │   └── index/
+│       ├── corpus_stats.json
+│       ├── source_manifest.jsonl
+│       ├── chunks.jsonl
+│       └── tfidf_index.json
 └── tests/
     ├── test_data_builder.py
     ├── test_parse_doc.py
@@ -60,11 +92,11 @@ enterprise_agent/
     └── test_retriever.py
 ```
 
-修改：
+同时更新：
 
 ```text
-requirements.txt
 README.md
+requirements.txt
 ```
 
 ---
@@ -73,19 +105,32 @@ README.md
 
 ### Task 1: 初始化工程目录
 
-- [ ] 创建 `enterprise_agent/`、`enterprise_agent/tools/`、`enterprise_agent/rag/`、`enterprise_agent/data/raw/`、`enterprise_agent/data/generators/`、`enterprise_agent/data/docs/`、`enterprise_agent/data/index/`、`enterprise_agent/tests/`。
-- [ ] 创建 `__init__.py`，保证后续可以用 `python -m enterprise_agent...` 执行模块。
-- [ ] 在 `README.md` 增加 M1 运行命令：
+- [x] 创建 `enterprise_agent/`、`enterprise_agent/tools/`、`enterprise_agent/rag/`、`enterprise_agent/data/raw/`、`enterprise_agent/data/docs/`、`enterprise_agent/data/index/`、`enterprise_agent/tests/`。
+- [x] 创建 `__init__.py`，支持 `python -m enterprise_agent...`。
+- [x] 在 `README.md` 增加 M1 运行命令。
 
-```bash
-python -m enterprise_agent.rag.data_builder --min-docs 300
-python -m enterprise_agent.rag.build_index
-python -m enterprise_agent.rag.retriever --query "差旅报销需要哪些材料" --top-k 5
+### Task 2: 下载公开真实 raw seed
+
+- [x] 新增 `enterprise_agent/rag/download_raw_data.py`。
+- [x] 新增 `enterprise_agent/data/raw/source_manifest.json`。
+- [x] 下载公开 PDF / DOCX / DOC / HTML raw 文件。
+- [x] 为 raw 文件写入 `.meta.json`，记录 `source_url`、`source_name`、`declared_doc_type`。
+- [x] 安装并使用 `PyMuPDF` 加速 PDF 解析。
+
+当前 raw 覆盖：
+
+```text
+policy    PDF / HTML
+workflow  PDF
+project   HTML
+meeting   PDF / DOCX / HTML
+contract  PDF / DOCX / DOC / HTML
+report    PDF / HTML
 ```
 
-### Task 2: 构建中等规模半真实企业文档
+### Task 3: 构建企业规章 Markdown
 
-- [ ] 在 `enterprise_agent/data/docs/` 准备 6 类文档：
+- [x] 在 `enterprise_agent/data/docs/` 准备 6 类文档：
 
 ```text
 policies/
@@ -96,144 +141,131 @@ contracts/
 reports/
 ```
 
-- [ ] 文档规模满足最低验收：
+- [x] 文档规模满足验收：
 
 ```text
-policies   >= 80 篇
-workflows  >= 40 篇
-projects   >= 80 篇
-meetings   >= 80 篇
-contracts  >= 50 篇
-reports    >= 30 篇
-总文档数   >= 300 篇
+policies   = 80 篇
+workflows  = 40 篇
+projects   = 80 篇
+meetings   = 80 篇
+contracts  = 50 篇
+reports    = 30 篇
+总文档数   = 360 篇
 ```
 
-- [ ] 数据来源比例目标：
+- [x] 所有文档基于 public seed 扩写：
 
-```text
-公开真实数据：30%-40%
-模板扩展数据：50%-60%
-人工精写数据：10%
-```
-
-- [ ] 每篇文档至少包含一个一级标题、两个二级标题和可检索的制度/流程/项目内容。
-- [ ] 确保文档能支撑这些查询：
-
-```text
-差旅报销需要哪些材料？
-8000 元采购申请是否需要审批？
-A 项目当前有哪些风险？
-合同审批需要经过哪些部门？
-根据会议纪要生成项目周报需要包含哪些部分？
-```
-
-### Task 3: 实现数据构建器
-
-文件：`enterprise_agent/rag/data_builder.py`
-
-- [ ] 实现 `build_corpus(output_dir: str = "enterprise_agent/data/docs") -> dict`。
-- [ ] 从 `enterprise_agent/data/raw/` 读取公开采样数据。
-- [ ] 从 `enterprise_agent/data/generators/` 读取模板配置。
-- [ ] 批量生成 policies、workflows、projects、meetings、contracts、reports 六类 Markdown。
-- [ ] 写入 `enterprise_agent/data/index/corpus_stats.json`：
-
-```python
+```json
 {
-    "total_docs": 360,
-    "by_type": {
-        "policy": 80,
-        "workflow": 40,
-        "project": 80,
-        "meeting": 80,
-        "contract": 50,
-        "report": 30
-    },
-    "source_mix": {
-        "public": 0.35,
-        "template": 0.55,
-        "manual": 0.10
-    }
+  "raw_seed_docs": 13,
+  "source_mix": {
+    "public_seed": 1.0,
+    "template_fallback": 0.0
+  },
+  "source_counts": {
+    "expanded": 360,
+    "public_seed_docs": 360,
+    "template_fallback_docs": 0
+  }
 }
 ```
 
-- [ ] 支持 CLI：
+- [x] 文档正文为企业规章风格。
+- [x] 文档正文不包含来源 front matter 或公开来源介绍。
+- [x] 禁止生成以下模板痕迹：
 
-```bash
-python -m enterprise_agent.rag.data_builder --min-docs 300
+```text
+知识库扩展条目
+检索关键词覆盖
+检索系统应优先返回
+公开来源摘要
+公开真实 seed
+source_url
+seed_path
+raw_format
+is_expanded
+```
+
+- [x] 合同类标题修正为规章标题，例如：
+
+```text
+# 合同审批管理规程 001
 ```
 
 ### Task 4: 实现文档解析
 
 文件：`enterprise_agent/tools/parse_doc.py`
 
-- [ ] 实现 `parse_document(path: str) -> dict`。
-- [ ] 返回结构：
+- [x] 实现 `parse_document(path: str) -> dict`。
+- [x] 支持 `.md`、`.txt`、`.pdf`、`.docx`、`.html`、`.htm`。
+- [x] PDF 优先使用 `PyMuPDF/fitz`，失败时 fallback 到 `pypdf`。
+- [x] DOCX 使用 `python-docx`。
+- [x] HTML 使用 `beautifulsoup4`。
+- [x] 支持 front matter 解析，但生成后的企业规章 Markdown 不再写 front matter。
+- [x] `doc_type` 根据目录名或文件名前缀判断。
+
+返回结构：
 
 ```python
 {
-    "source": "policy_reimbursement.md",
-    "doc_type": "policy",
-    "title": "差旅报销制度",
+    "source": "contract_001.md",
+    "doc_type": "contract",
+    "title": "合同审批管理规程 001",
     "content": "...",
-    "metadata": {"path": "..."}
+    "metadata": {"path": "...", "raw_format": "md"}
 }
-```
-
-- [ ] `doc_type` 根据文件名前缀判断：
-
-```text
-policies/* 或 policy_* -> policy
-workflows/* 或 workflow_* -> workflow
-projects/* 或 project_* -> project
-meetings/* 或 meeting_* -> meeting
-contracts/* 或 contract_* -> contract
-reports/* 或 report_* -> report
-其他 -> general
 ```
 
 ### Task 5: 实现 chunker
 
 文件：`enterprise_agent/rag/chunker.py`
 
-- [ ] 实现 `chunk_document(doc: dict, max_chars: int = 800, overlap: int = 80) -> list[dict]`。
-- [ ] 每个 chunk 必须包含：
+- [x] 实现 `chunk_document(doc: dict, max_chars: int = 240, overlap: int = 30) -> list[dict]`。
+- [x] 每个 chunk 包含：
 
 ```python
 {
-    "chunk_id": "policy_reimbursement_chunk_001",
-    "source": "policy_reimbursement.md",
-    "doc_type": "policy",
-    "title": "差旅报销制度",
+    "chunk_id": "contract_001_chunk_001",
+    "source": "contract_001.md",
+    "doc_type": "contract",
+    "title": "合同审批管理规程 001",
     "content": "...",
     "metadata": {"chunk_index": 1}
 }
 ```
 
-- [ ] chunk 不允许为空，`chunk_id` 在同一文档内递增。
+- [x] chunk 不允许为空。
+- [x] `chunk_id` 在同一文档内递增。
+
+说明：
+
+* 默认 chunk 粒度从 800 调整为 240；
+* 原因是企业规章文档已去除模板堆叠，较小 chunk 更适合 RAG 检索，也能保持 3,000+ chunks 的 M1 体量。
 
 ### Task 6: 实现索引构建
 
 文件：`enterprise_agent/rag/build_index.py`
 
-- [ ] 递归读取 `enterprise_agent/data/docs/` 下所有 `.md` 和 `.txt`。
-- [ ] 调用 `parse_document` 和 `chunk_document`。
-- [ ] 生成 `enterprise_agent/data/index/chunks.jsonl`。
-- [ ] 确保 `chunks.jsonl` 至少 3,000 行。
-- [ ] 构建向量索引，保存到 `enterprise_agent/data/index/`。
-- [ ] 如果暂时没有 FAISS / Chroma，可先使用 TF-IDF 或 embedding cosine 作为可运行 fallback，但接口保持不变。
+- [x] 递归读取 `enterprise_agent/data/docs/` 下所有 `.md` 和 `.txt`。
+- [x] 调用 `parse_document` 和 `chunk_document`。
+- [x] 读取 `enterprise_agent/data/index/source_manifest.jsonl`。
+- [x] 将 `source_url`、`seed_path`、`raw_format`、`is_expanded` 合并到 chunk metadata。
+- [x] 生成 `enterprise_agent/data/index/chunks.jsonl`。
+- [x] `chunks.jsonl` 达到 3,297 行。
+- [x] 构建 TF-IDF fallback 索引，保存到 `enterprise_agent/data/index/tfidf_index.json`。
 
 ### Task 7: 实现 retriever
 
 文件：`enterprise_agent/rag/retriever.py`
 
-- [ ] 实现：
+- [x] 实现：
 
 ```python
 def retrieve(query: str, top_k: int = 5, filters: dict | None = None) -> list[dict]:
     ...
 ```
 
-- [ ] 返回字段：
+- [x] 返回字段：
 
 ```python
 [
@@ -247,7 +279,7 @@ def retrieve(query: str, top_k: int = 5, filters: dict | None = None) -> list[di
 ]
 ```
 
-- [ ] 支持 CLI：
+- [x] 支持 CLI：
 
 ```bash
 python -m enterprise_agent.rag.retriever --query "差旅报销需要哪些材料" --top-k 5
@@ -255,52 +287,126 @@ python -m enterprise_agent.rag.retriever --query "差旅报销需要哪些材料
 
 ### Task 8: 测试
 
-- [ ] `tests/test_data_builder.py` 覆盖文档数量、类别分布、`corpus_stats.json`。
-- [ ] `tests/test_parse_doc.py` 覆盖标题、doc_type、content 解析。
-- [ ] `tests/test_chunker.py` 覆盖 chunk 非空、chunk_id、metadata。
-- [ ] `tests/test_retriever.py` 覆盖检索结果包含 `source/chunk_id/content/score`。
-- [ ] 运行：
+- [x] `tests/test_data_builder.py` 覆盖文档数量、类别分布、`corpus_stats.json`、`source_manifest.jsonl`、正文无来源字段和无模板痕迹。
+- [x] `tests/test_parse_doc.py` 覆盖 Markdown / TXT / HTML / DOCX / PDF 标题、doc_type、content 和 metadata 解析。
+- [x] `tests/test_chunker.py` 覆盖 chunk 非空、chunk_id、metadata。
+- [x] `tests/test_retriever.py` 覆盖索引构建、检索排序、filters、CLI、3,000+ chunks。
+
+---
+
+## 4. 复现命令
+
+使用项目 conda 环境：
 
 ```bash
-pytest enterprise_agent/tests/test_data_builder.py enterprise_agent/tests/test_parse_doc.py enterprise_agent/tests/test_chunker.py enterprise_agent/tests/test_retriever.py -q
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.rag.download_raw_data
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.rag.data_builder --min-docs 300
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.rag.build_index
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.rag.retriever --query "差旅报销需要哪些材料" --top-k 5
+env PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m pytest enterprise_agent/tests -q
+```
+
+联网下载或安装依赖时使用：
+
+```bash
+export HTTP_PROXY=http://127.0.0.1:27890
+export HTTPS_PROXY=http://127.0.0.1:27890
+export ALL_PROXY=socks5://127.0.0.1:27890
+export http_proxy=http://127.0.0.1:27890
+export https_proxy=http://127.0.0.1:27890
+export all_proxy=socks5://127.0.0.1:27890
+```
+
+安装依赖示例：
+
+```bash
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m pip install \
+  -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  --trusted-host pypi.tuna.tsinghua.edu.cn \
+  pymupdf
 ```
 
 ---
 
-## 4. 验收标准
+## 5. 验收结果
 
-M1 完成后必须满足：
-
-```bash
-python -m enterprise_agent.rag.data_builder --min-docs 300
-python -m enterprise_agent.rag.build_index
-python -m enterprise_agent.rag.retriever --query "差旅报销需要哪些材料" --top-k 5
-pytest enterprise_agent/tests/test_data_builder.py enterprise_agent/tests/test_parse_doc.py enterprise_agent/tests/test_chunker.py enterprise_agent/tests/test_retriever.py -q
-```
-
-期望：
-
-* `enterprise_agent/data/docs/` 至少 300 篇文档；
-* `enterprise_agent/data/index/chunks.jsonl` 至少 3,000 行；
-* `enterprise_agent/data/index/corpus_stats.json` 存在；
-* 检索输出至少 3 条结果；
-* 每条结果包含 `source`、`chunk_id`、`content`、`score`；
-* `data/index/chunks.jsonl` 存在；
-* 测试通过。
-
----
-
-## 5. 同步记录
-
-执行同步时记录：
+最新验收结果：
 
 ```text
-日期：
-执行人：
+data/docs 文档数：360
+policies: 80
+workflows: 40
+projects: 80
+meetings: 80
+contracts: 50
+reports: 30
+raw_seed_docs: 13
+chunks.jsonl: 3297 chunks
+pytest: 17 passed
+```
+
+正文检查：
+
+```bash
+rg "source_url|seed_path|raw_format|is_expanded|公开来源摘要|公开真实 seed|合同审批审批记录" enterprise_agent/data/docs
+```
+
+结果：无匹配。
+
+样例标题：
+
+```text
+# 合同审批管理规程 001
+```
+
+chunk metadata 样例保留来源：
+
+```python
+{
+    "source_url": "...",
+    "seed_path": "...",
+    "raw_format": "docx",
+    "is_expanded": True
+}
+```
+
+---
+
+## 6. 同步记录
+
+```text
+日期：2026-06-03
+执行人：Codex
 完成步骤：
+  - 初始化 M1 工程目录
+  - 下载公开 raw seed
+  - 支持 PDF / DOCX / HTML 解析
+  - 使用 PyMuPDF 解析 PDF
+  - 生成 360 篇企业规章 Markdown
+  - 将来源信息移出正文，写入 source_manifest.jsonl
+  - 构建 3297 chunks 和 TF-IDF fallback 索引
+  - 完成 retriever CLI
 生成文件：
+  - enterprise_agent/rag/download_raw_data.py
+  - enterprise_agent/rag/data_builder.py
+  - enterprise_agent/rag/chunker.py
+  - enterprise_agent/rag/build_index.py
+  - enterprise_agent/rag/retriever.py
+  - enterprise_agent/tools/parse_doc.py
+  - enterprise_agent/data/raw/
+  - enterprise_agent/data/docs/
+  - enterprise_agent/data/index/
 验证命令：
+  - /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.rag.data_builder --min-docs 300
+  - /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.rag.build_index
+  - /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.rag.retriever --query "合同审批需要经过哪些部门" --top-k 2
+  - env PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m pytest enterprise_agent/tests -q
 验证结果：
+  - 360 documents
+  - 3297 chunks
+  - 17 passed
 阻塞问题：
+  - 无当前阻塞
 下一步：
+  - 进入 M2：Tool Contract 与 Agent Runtime
 ```

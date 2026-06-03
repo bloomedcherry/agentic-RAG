@@ -1,0 +1,21 @@
+{
+  "by_type": {
+    "contract": 50,
+    "meeting": 80,
+    "policy": 80,
+    "project": 80,
+    "report": 30,
+    "workflow": 40
+  },
+  "raw_seed_docs": 13,
+  "source_counts": {
+    "expanded": 360,
+    "public_seed_docs": 360,
+    "template_fallback_docs": 0
+  },
+  "source_mix": {
+    "public_seed": 1.0,
+    "template_fallback": 0.0
+  },
+  "total_docs": 360
+}
