@@ -36,18 +36,19 @@ class Runtime:
         self.graph = build_graph(self.registry)
         self.trace_path = Path(trace_path)
 
-    def run(self, query: str, user_role: str = "employee") -> dict:
+    def run(self, query: str, user_role: str = "employee", task_id: str | None = None) -> dict:
         start = time.perf_counter()
-        result = self.graph.invoke(
-            {
-                "query": query,
-                "role": user_role,
-                "tool_calls": [],
-                "tool_outputs": {},
-                "retrieved_docs": [],
-                "errors": [],
-            }
-        )
+        initial_state = {
+            "query": query,
+            "role": user_role,
+            "tool_calls": [],
+            "tool_outputs": {},
+            "retrieved_docs": [],
+            "errors": [],
+        }
+        if task_id:
+            initial_state["task_id"] = task_id
+        result = self.graph.invoke(initial_state)
         result["latency"] = time.perf_counter() - start
         verifier_result = verify(result)
         result["verifier_result"] = verifier_result

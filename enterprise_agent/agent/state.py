@@ -6,6 +6,7 @@ from typing import Any, TypedDict
 
 
 class AgentState(TypedDict, total=False):
+    task_id: str
     query: str
     role: str
     task_type: str

@@ -297,12 +297,51 @@ pytest enterprise_agent/tests/test_eval_rag.py enterprise_agent/tests/test_eval_
 ## 5. 同步记录
 
 ```text
-日期：
-执行人：
+日期：2026-06-03
+执行人：Codex
 完成步骤：
+- 构建 50 条 eval task，覆盖制度问答、流程判断、项目分析、数据分析和报告生成。
+- 实现 enterprise_agent.eval 包，包括 run_eval_tasks.py、eval_rag.py、eval_tool.py、eval_task.py、analyze_trace.py。
+- 修复 Runtime.run(task_id=...) 在 LangGraph state 中丢失的问题，使 eval trace 可和任务集对齐。
+- 修复 eval_tool/eval_task 在追加 traces.jsonl 场景下重复统计历史同 task_id trace 的问题。
+- 生成 eval_summary.md 和 project_review.md。
+- 更新 README 与简历表达。
 生成文件：
+- enterprise_agent/data/eval_tasks.jsonl
+- enterprise_agent/eval/__init__.py
+- enterprise_agent/eval/common.py
+- enterprise_agent/eval/run_eval_tasks.py
+- enterprise_agent/eval/eval_rag.py
+- enterprise_agent/eval/eval_tool.py
+- enterprise_agent/eval/eval_task.py
+- enterprise_agent/eval/analyze_trace.py
+- enterprise_agent/report/eval_summary.md
+- enterprise_agent/report/project_review.md
+- enterprise_agent/tests/test_eval_rag.py
+- enterprise_agent/tests/test_eval_tool.py
+- enterprise_agent/tests/test_eval_task.py
+- enterprise_agent/tests/test_analyze_trace.py
 验证命令：
+- /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m pytest enterprise_agent/tests/test_eval_rag.py enterprise_agent/tests/test_eval_tool.py enterprise_agent/tests/test_eval_task.py enterprise_agent/tests/test_analyze_trace.py -q
+- /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.run_eval_tasks --eval-file enterprise_agent/data/eval_tasks.jsonl --limit 50
+- /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.eval_rag --eval-file enterprise_agent/data/eval_tasks.jsonl
+- /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.eval_tool --trace-file enterprise_agent/logs/traces.jsonl --eval-file enterprise_agent/data/eval_tasks.jsonl
+- /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.eval_task --trace-file enterprise_agent/logs/traces.jsonl --eval-file enterprise_agent/data/eval_tasks.jsonl
+- /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.analyze_trace --trace-file enterprise_agent/logs/traces.jsonl
 验证结果：
+- Eval set: 50 条。
+- RAG Recall@1/3/5: 0.075 / 0.100 / 0.100。
+- Tool Call Accuracy: 1.000。
+- Tool Success Rate: 0.978。
+- Permission Blocking Accuracy: 1.000。
+- Task Success Rate: 0.960。
+- Citation Accuracy: 1.000。
+- Verifier Pass Rate: 0.960。
+- Average Latency: 0.624527s。
 阻塞问题：
+- 无。
 下一步：
+- 优化 RAG 检索，考虑 hybrid retrieval、embedding 和 rerank。
+- 将权限拒绝类任务拆成安全成功指标，避免和普通任务成功率混淆。
+- 增加更丰富的受控 SQL query_type。
 ```

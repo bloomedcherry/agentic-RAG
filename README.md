@@ -1,6 +1,6 @@
 # Harness Engineering Agent Demo
 
-This repository contains an enterprise Agentic RAG demo built around an Agent Harness runtime.
+This repository contains an enterprise Agentic RAG knowledge assistant and controllable Agent Harness runtime.
 
 ## M1: Data And RAG Baseline
 
@@ -81,4 +81,63 @@ Run M3 verification:
 ```bash
 /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m pytest enterprise_agent/tests/test_permission.py enterprise_agent/tests/test_verifier.py enterprise_agent/tests/test_trace.py enterprise_agent/tests/test_runtime_m3.py -q
 /mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m pytest enterprise_agent/tests -q
+```
+
+## M4: Eval, Demo, And Project Review
+
+M4 adds a 50-task eval set, eval scripts, trace analysis, and project review reports.
+
+Run the full demo path:
+
+```bash
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.rag.build_index
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.data.init_business_db
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.app --query "差旅报销需要哪些材料？" --role employee
+```
+
+Run eval tasks and metrics:
+
+```bash
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.run_eval_tasks --eval-file enterprise_agent/data/eval_tasks.jsonl --limit 50
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.eval_rag --eval-file enterprise_agent/data/eval_tasks.jsonl
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.eval_tool --trace-file enterprise_agent/logs/traces.jsonl --eval-file enterprise_agent/data/eval_tasks.jsonl
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.eval_task --trace-file enterprise_agent/logs/traces.jsonl --eval-file enterprise_agent/data/eval_tasks.jsonl
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.eval.analyze_trace --trace-file enterprise_agent/logs/traces.jsonl
+```
+
+Example trace fields:
+
+```json
+{
+  "task_id": "task_001",
+  "query": "差旅报销需要哪些材料？",
+  "user_role": "employee",
+  "task_type": "policy_qa",
+  "tool_calls": [{"name": "search_kb", "status": "success"}],
+  "verifier_result": {"pass": true, "issues": [], "suggested_action": "none"},
+  "success": true,
+  "error_type": null
+}
+```
+
+Latest measured eval results:
+
+| Metric | Value |
+| --- | ---: |
+| RAG Recall@1 | 0.075 |
+| RAG Recall@3 | 0.100 |
+| RAG Recall@5 | 0.100 |
+| Tool Call Accuracy | 1.000 |
+| Tool Success Rate | 0.978 |
+| Permission Blocking Accuracy | 1.000 |
+| Task Success Rate | 0.960 |
+| Citation Accuracy | 1.000 |
+| Verifier Pass Rate | 0.960 |
+| Average Latency | 0.624527s |
+
+Reports:
+
+```text
+enterprise_agent/report/eval_summary.md
+enterprise_agent/report/project_review.md
 ```
