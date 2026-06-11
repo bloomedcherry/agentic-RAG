@@ -193,6 +193,19 @@ FastAPI 服务化 + 可观测性 + Docker 部署
 Gold Set + CI 质量门禁 + 正式消融实验
 ```
 
+对应分步执行文件：
+
+| 里程碑 | 执行文件 | 核心交付 |
+| --- | --- | --- |
+| M5 | `doc/12M5统一配置与LLMGateway执行文件.md` | OpenAI-compatible 主/辅助模型、结构化输出、规则降级 |
+| M6 | `doc/13M6会话Memory与Checkpoint执行文件.md` | SQLite/PostgreSQL Memory、Checkpoint、摘要、会话管理 |
+| M7 | `doc/14M7配置式Skill与渐进式披露执行文件.md` | Skill Registry、选择、执行、渐进式加载 |
+| M8 | `doc/15M8企业MCP工具与双传输执行文件.md` | 企业 MCP Server、stdio、Streamable HTTP、Tool Adapter |
+| M9 | `doc/16M9HybridRAG与Rerank执行文件.md` | BM25、Embedding、Hybrid、Rerank、Query Rewrite |
+| M10 | `doc/17M10身份细粒度权限与安全控制执行文件.md` | 身份、数据范围、脱敏、注入防护、HITL |
+| M11 | `doc/18M11FastAPI可观测性与Docker执行文件.md` | API、异步 Runtime、日志指标、Docker Compose |
+| M12 | `doc/19M12生产评测质量门禁与项目收口执行文件.md` | Gold Set、生产指标、CI 门禁、项目收口 |
+
 ## 4. 当前下一阶段范围
 
 下一阶段已确定实现：
@@ -212,4 +225,3 @@ Gold Set + CI 质量门禁 + 正式消融实验
 - 模型、Memory、Skill、MCP 失败时回退现有 M4 规则链路。
 
 该阶段完成后，系统会从可评估 Harness Demo 进一步升级为具备真实模型、多轮会话记忆、可复用任务流程和标准化外部工具协议的 Agent 系统，但仍不等同于完成生产级安全、服务高可用和正式质量门禁。
-
