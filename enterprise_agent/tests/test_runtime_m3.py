@@ -12,6 +12,7 @@ def test_runtime_denies_employee_sql_and_writes_trace(tmp_path):
         db_path=db_path,
         workflow_rules_path=rules_path,
         trace_path=trace_path,
+        llm_enabled=False,
     )
 
     result = runtime.run("我是普通员工，帮我查询所有部门采购金额统计。", user_role="employee")
@@ -39,6 +40,7 @@ def test_runtime_policy_answer_keeps_citation_and_trace_success(tmp_path):
         db_path=db_path,
         workflow_rules_path=rules_path,
         trace_path=trace_path,
+        llm_enabled=False,
     ).run("差旅报销需要哪些材料？", user_role="employee")
 
     assert result["verifier_result"]["pass"] is True
@@ -57,6 +59,7 @@ def test_runtime_preserves_supplied_task_id_in_trace(tmp_path):
         db_path=db_path,
         workflow_rules_path=rules_path,
         trace_path=trace_path,
+        llm_enabled=False,
     ).run("差旅报销需要哪些材料？", user_role="employee", task_id="task_eval_001")
 
     record = json.loads(trace_path.read_text(encoding="utf-8").splitlines()[0])

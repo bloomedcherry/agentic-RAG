@@ -14,4 +14,6 @@ class Router:
     }
 
     def route(self, state: AgentState) -> AgentState:
+        if state.get("planner_source") == "llm" and state.get("selected_tools"):
+            return state
         return {**state, "selected_tools": self.ROUTES.get(state.get("task_type"), ["search_kb"])}

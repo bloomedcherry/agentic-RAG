@@ -141,3 +141,38 @@ Reports:
 enterprise_agent/report/eval_summary.md
 enterprise_agent/report/project_review.md
 ```
+
+## M5: Unified Configuration And LLM Gateway
+
+M5 adds an optional OpenAI-compatible LLM layer while retaining the M4 rule
+planner, template answer generator, permission checks, verifier, and trace path
+as deterministic fallbacks.
+
+Copy `.env.example` to `.env` and configure model names and endpoints. The main
+model generates answers. The independently configured utility model performs
+planning. Both local vLLM and third-party OpenAI-compatible APIs use the same
+gateway; no model name is hardcoded in application code.
+
+Run without an LLM:
+
+```bash
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.app \
+  --query "差旅报销需要哪些材料？" --role employee --no-llm
+```
+
+Run with configured LLM endpoints:
+
+```bash
+LLM_ENABLED=true \
+MAIN_LLM_BASE_URL=http://127.0.0.1:8000/v1 \
+MAIN_LLM_API_KEY=local \
+MAIN_LLM_MODEL=<configured-model> \
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.app \
+  --query "差旅报销需要哪些材料？" --role employee
+```
+
+`--llm-enabled` and `--no-llm` override `LLM_ENABLED` for one CLI invocation.
+If an endpoint is unavailable or produces invalid planning output, the runtime
+falls back to the M4 path. Trace records include model, endpoint, token counts,
+latency, status, error type, and fallback state without storing prompts or API
+keys.

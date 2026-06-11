@@ -19,5 +19,11 @@ class AgentState(TypedDict, total=False):
     answer: str
     errors: list[Any]
     verifier_result: dict[str, Any]
+    verifier_history: list[dict[str, Any]]
+    llm_calls: list[dict[str, Any]]
+    llm_fallback_used: bool
+    prompt_version: str
+    planner_source: str
+    planner_reason: str
     trace_path: str
     latency: float

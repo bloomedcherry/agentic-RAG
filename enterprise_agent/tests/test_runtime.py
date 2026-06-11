@@ -74,7 +74,12 @@ def _prepare_runtime_data(tmp_path):
 def test_runtime_runs_policy_question_through_langgraph(tmp_path):
     index_dir, db_path, rules_path = _prepare_runtime_data(tmp_path)
 
-    result = Runtime(index_dir=index_dir, db_path=db_path, workflow_rules_path=rules_path).run(
+    result = Runtime(
+        index_dir=index_dir,
+        db_path=db_path,
+        workflow_rules_path=rules_path,
+        llm_enabled=False,
+    ).run(
         "差旅报销需要哪些材料？",
         user_role="employee",
     )
@@ -89,7 +94,12 @@ def test_runtime_runs_policy_question_through_langgraph(tmp_path):
 
 def test_runtime_routes_workflow_and_project_analysis(tmp_path):
     index_dir, db_path, rules_path = _prepare_runtime_data(tmp_path)
-    runtime = Runtime(index_dir=index_dir, db_path=db_path, workflow_rules_path=rules_path)
+    runtime = Runtime(
+        index_dir=index_dir,
+        db_path=db_path,
+        workflow_rules_path=rules_path,
+        llm_enabled=False,
+    )
 
     workflow = runtime.run("这个 8000 元采购申请是否需要审批？", user_role="employee")
     project = runtime.run("帮我分析 A 项目当前有哪些风险。", user_role="manager")
@@ -106,7 +116,12 @@ def test_runtime_routes_workflow_and_project_analysis(tmp_path):
 def test_runtime_routes_data_analysis_through_sql_and_report(tmp_path):
     index_dir, db_path, rules_path = _prepare_runtime_data(tmp_path)
 
-    result = Runtime(index_dir=index_dir, db_path=db_path, workflow_rules_path=rules_path).run(
+    result = Runtime(
+        index_dir=index_dir,
+        db_path=db_path,
+        workflow_rules_path=rules_path,
+        llm_enabled=False,
+    ).run(
         "统计当前高风险项目",
         user_role="manager",
     )
@@ -135,6 +150,7 @@ def test_cli_runs_from_project_root(tmp_path):
             str(db_path),
             "--workflow-rules-path",
             str(rules_path),
+            "--no-llm",
         ],
         check=True,
         capture_output=True,
