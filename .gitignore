@@ -55,7 +55,11 @@ data/vector_store/
 artifacts/
 outputs/
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
+*.sqlite-wal
+*.sqlite-shm
 *.sqlite3
 
 # Model and embedding caches

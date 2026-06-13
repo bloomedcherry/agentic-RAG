@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from pathlib import Path
 
 from enterprise_agent.agent.graph import build_graph
@@ -12,6 +13,19 @@ from enterprise_agent.agent.verifier import verify
 from enterprise_agent.config import Settings
 from enterprise_agent.llm.base import BaseLLMClient
 from enterprise_agent.llm.client import OpenAICompatibleClient
+from enterprise_agent.memory.base import MemoryStore
+from enterprise_agent.memory.checkpointer import (
+    build_checkpointer,
+    checkpoint_thread_key,
+)
+from enterprise_agent.memory.locks import (
+    DEFAULT_SESSION_LOCK_MANAGER,
+    PostgresSessionLockManager,
+    SessionLockManager,
+)
+from enterprise_agent.memory.manager import MemoryManager
+from enterprise_agent.memory.sqlite_store import SQLiteMemoryStore
+from enterprise_agent.memory.summarizer import MemorySummarizer
 from enterprise_agent.tools.registry import ToolRegistry
 from enterprise_agent.tools.runtime_tools import (
     DEFAULT_DB_PATH,
@@ -34,6 +48,10 @@ class Runtime:
         answer_llm_client: BaseLLMClient | None = None,
         settings: Settings | None = None,
         llm_enabled: bool | None = None,
+        memory_store: MemoryStore | None = None,
+        memory_manager: MemoryManager | None = None,
+        checkpointer=None,
+        session_lock_manager: SessionLockManager | None = None,
     ) -> None:
         self.settings = settings or Settings()
         configured_enabled = (
@@ -45,6 +63,17 @@ class Runtime:
             answer_llm_client = _build_main_client(self.settings)
         self.planner_llm_client = planner_llm_client
         self.answer_llm_client = answer_llm_client
+        self.memory_store = memory_store or _build_memory_store(self.settings)
+        self.memory_manager = memory_manager or MemoryManager(
+            self.memory_store,
+            summarizer=MemorySummarizer(self.planner_llm_client),
+            max_recent_turns=self.settings.memory_max_recent_turns,
+            max_context_tokens=self.settings.memory_max_context_tokens,
+        )
+        self.checkpointer = checkpointer or build_checkpointer(self.settings)
+        self.session_lock_manager = session_lock_manager or _build_lock_manager(
+            self.settings
+        )
 
         self.registry = ToolRegistry()
         self.registry.register(SearchKbTool(index_dir=index_dir))
@@ -55,22 +84,66 @@ class Runtime:
             self.registry,
             planner_llm_client=self.planner_llm_client,
             answer_llm_client=self.answer_llm_client,
+            memory_manager=self.memory_manager,
+            checkpointer=self.checkpointer,
+            answer_max_tokens=self.settings.main_llm_max_tokens,
+            max_context_chars=self.settings.agent_max_context_chars,
         )
         self.trace_path = Path(trace_path)
 
-    def run(self, query: str, user_role: str = "employee", task_id: str | None = None) -> dict:
+    def run(
+        self,
+        query: str,
+        user_role: str = "employee",
+        task_id: str | None = None,
+        user_id: str | None = None,
+        thread_id: str | None = None,
+    ) -> dict:
+        resolved_user_id = user_id or f"local-{uuid.uuid4()}"
+        resolved_thread_id = thread_id or str(uuid.uuid4())
+        with self.session_lock_manager.acquire(
+            resolved_user_id,
+            resolved_thread_id,
+            timeout=self.settings.memory_lock_timeout,
+        ):
+            result = self._run_locked(
+                query=query,
+                user_role=user_role,
+                task_id=task_id,
+                user_id=resolved_user_id,
+                thread_id=resolved_thread_id,
+            )
+        return result
+
+    def _run_locked(
+        self,
+        *,
+        query: str,
+        user_role: str,
+        task_id: str | None,
+        user_id: str,
+        thread_id: str,
+    ) -> dict:
         start = time.perf_counter()
         initial_state = {
+            "user_id": user_id,
+            "thread_id": thread_id,
             "query": query,
             "role": user_role,
             "tool_calls": [],
             "tool_outputs": {},
             "retrieved_docs": [],
             "errors": [],
+            "llm_calls": [],
         }
         if task_id:
             initial_state["task_id"] = task_id
-        result = self.graph.invoke(initial_state)
+        config = {
+            "configurable": {
+                "thread_id": checkpoint_thread_key(user_id, thread_id)
+            }
+        }
+        result = self.graph.invoke(initial_state, config=config)
         result["latency"] = time.perf_counter() - start
         verifier_result = verify(result)
         result["verifier_result"] = verifier_result
@@ -145,3 +218,17 @@ def _build_utility_client(settings: Settings) -> BaseLLMClient | None:
         timeout=settings.utility_llm_timeout,
         max_attempts=settings.llm_max_attempts,
     )
+
+
+def _build_memory_store(settings: Settings) -> MemoryStore:
+    if settings.memory_backend == "postgres":
+        from enterprise_agent.memory.postgres_store import PostgresMemoryStore
+
+        return PostgresMemoryStore(settings.memory_postgres_url or "")
+    return SQLiteMemoryStore(settings.memory_sqlite_path)
+
+
+def _build_lock_manager(settings: Settings):
+    if settings.memory_backend == "postgres":
+        return PostgresSessionLockManager(settings.memory_postgres_url or "")
+    return DEFAULT_SESSION_LOCK_MANAGER

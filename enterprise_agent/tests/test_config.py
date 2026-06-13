@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 
 def test_settings_disable_llm_by_default(monkeypatch) -> None:
     from enterprise_agent.config import Settings
@@ -33,6 +36,9 @@ def test_settings_load_main_utility_and_fallback_models_independently(monkeypatc
         "MAIN_LLM_API_KEY": "main-secret",
         "MAIN_LLM_MODEL": "main-model",
         "MAIN_LLM_TIMEOUT": "45",
+        "MAIN_LLM_CONTEXT_WINDOW": "1000000",
+        "MAIN_LLM_MAX_TOKENS": "4096",
+        "AGENT_MAX_CONTEXT_CHARS": "32000",
         "MAIN_LLM_FALLBACK_BASE_URL": "http://fallback.example/v1",
         "MAIN_LLM_FALLBACK_API_KEY": "fallback-secret",
         "MAIN_LLM_FALLBACK_MODEL": "fallback-model",
@@ -52,6 +58,9 @@ def test_settings_load_main_utility_and_fallback_models_independently(monkeypatc
     assert settings.main_llm_api_key == "main-secret"
     assert settings.main_llm_model == "main-model"
     assert settings.main_llm_timeout == 45.0
+    assert settings.main_llm_context_window == 1_000_000
+    assert settings.main_llm_max_tokens == 4096
+    assert settings.agent_max_context_chars == 32_000
     assert settings.main_llm_fallback_base_url == "http://fallback.example/v1"
     assert settings.main_llm_fallback_api_key == "fallback-secret"
     assert settings.main_llm_fallback_model == "fallback-model"
@@ -103,3 +112,34 @@ def test_cli_llm_flags_override_environment_default() -> None:
     assert parser.parse_args(["--query", "test"]).llm_enabled is None
     assert parser.parse_args(["--query", "test", "--llm-enabled"]).llm_enabled is True
     assert parser.parse_args(["--query", "test", "--no-llm"]).llm_enabled is False
+
+
+def test_settings_use_sqlite_memory_defaults(monkeypatch) -> None:
+    from enterprise_agent.config import Settings
+
+    for name in (
+        "MEMORY_BACKEND",
+        "MEMORY_SQLITE_PATH",
+        "MEMORY_POSTGRES_URL",
+        "MEMORY_MAX_RECENT_TURNS",
+        "MEMORY_MAX_CONTEXT_TOKENS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.memory_backend == "sqlite"
+    assert settings.memory_sqlite_path == "enterprise_agent/data/memory.db"
+    assert settings.memory_max_recent_turns == 10
+    assert settings.memory_max_context_tokens == 2000
+
+
+def test_postgres_memory_requires_database_url() -> None:
+    from enterprise_agent.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            memory_backend="postgres",
+            memory_postgres_url=None,
+        )

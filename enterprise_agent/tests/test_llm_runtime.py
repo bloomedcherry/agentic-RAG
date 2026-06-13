@@ -144,7 +144,7 @@ def test_context_builder_bounds_llm_context_and_omits_derived_report() -> None:
 def test_answer_generator_uses_configured_completion_budget() -> None:
     answer_llm = FakeLLMClient(content="结论：已回答。\n来源：policy.md")
 
-    AnswerGenerator(answer_llm).generate(
+    AnswerGenerator(answer_llm, max_tokens=4096).generate(
         {
             "query": "制度要求是什么？",
             "task_type": "policy_qa",
@@ -152,7 +152,30 @@ def test_answer_generator_uses_configured_completion_budget() -> None:
         }
     )
 
-    assert answer_llm.requests[0].max_tokens == 1024
+    assert answer_llm.requests[0].max_tokens == 4096
+
+
+def test_context_builder_preserves_referents_from_recent_answer() -> None:
+    second_risk = "第二个风险是报告频率不一致，应统一为周度报告。"
+    state = ContextBuilder(max_context_chars=32_000).build(
+        {
+            "query": "第二个风险怎么处理？",
+            "role": "manager",
+            "task_type": "project_analysis",
+            "memory_context": {
+                "recent_messages": [
+                    {
+                        "role": "assistant",
+                        "content": ("前置分析内容。" * 20) + second_risk,
+                    }
+                ]
+            },
+            "retrieved_docs": [],
+            "tool_outputs": {},
+        }
+    )
+
+    assert second_risk in state["context"]
 
 
 def test_answer_generator_removes_model_reasoning_block() -> None:

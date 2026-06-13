@@ -25,6 +25,8 @@ def _build_record(state: dict[str, Any]) -> dict[str, Any]:
     verifier_result = state.get("verifier_result") or {}
     record = {
         "task_id": state.get("task_id") or str(uuid.uuid4()),
+        "user_id": state.get("user_id"),
+        "thread_id": state.get("thread_id"),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "query": state.get("query", ""),
         "user_role": state.get("role", ""),

@@ -11,8 +11,14 @@ from enterprise_agent.llm.prompts import ANSWER_PROMPT_VERSION, build_answer_mes
 
 
 class AnswerGenerator:
-    def __init__(self, llm_client: BaseLLMClient | None = None) -> None:
+    def __init__(
+        self,
+        llm_client: BaseLLMClient | None = None,
+        *,
+        max_tokens: int = 1024,
+    ) -> None:
         self.llm_client = llm_client
+        self.max_tokens = max_tokens
 
     def generate(self, state: AgentState) -> tuple[str, dict[str, Any]]:
         if self.llm_client is None or state.get("errors"):
@@ -26,7 +32,7 @@ class AnswerGenerator:
                     context=state.get("context", ""),
                 ),
                 temperature=0.0,
-                max_tokens=1024,
+                max_tokens=self.max_tokens,
             )
         )
         llm_calls = list(state.get("llm_calls") or [])

@@ -28,6 +28,8 @@ dependencies:
 
       # Agent
       - langgraph==1.1.0
+      - langgraph-checkpoint-sqlite==3.1.0
+      - langgraph-checkpoint-postgres==3.1.0
       - "langchain-core>=1.3.3,<1.4.0"
       - langchain-protocol==0.0.10
       - "openai>=1.59.9,<2.0.0"
@@ -47,6 +49,7 @@ dependencies:
 
       # DB
       - sqlalchemy==2.0.36
+      - "psycopg[binary,pool]==3.3.4"
 
       # Eval/Trace
       - pytest==8.3.4

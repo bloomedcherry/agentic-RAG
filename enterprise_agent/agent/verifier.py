@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import re
+
 from enterprise_agent.agent.retry import decide_next_action
 
 RAG_TASKS = {"policy_qa", "workflow_check", "project_analysis"}
+SOURCE_FILE_PATTERN = re.compile(
+    r"[\w\u4e00-\u9fff./-]+\.(?:md|pdf|txt|docx?|xlsx?|csv|json)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def verify(state: dict) -> dict:
@@ -57,7 +63,13 @@ def _check_citation(
     answer: str,
     issues: list[dict[str, str]],
 ) -> None:
-    if task_type in RAG_TASKS and retrieved_docs and "来源" not in answer and "source" not in answer and "chunk_id" not in answer:
+    has_citation = (
+        "来源" in answer
+        or "source" in answer.lower()
+        or "chunk_id" in answer
+        or SOURCE_FILE_PATTERN.search(answer) is not None
+    )
+    if task_type in RAG_TASKS and retrieved_docs and not has_citation:
         issues.append({"type": "missing_citation", "message": "回答缺少引用来源"})
 
 

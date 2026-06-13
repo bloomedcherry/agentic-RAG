@@ -94,6 +94,26 @@ def test_timeout_is_mapped_to_llm_unavailable() -> None:
     assert "timed out" in response.content
 
 
+def test_sdk_retries_are_disabled_so_gateway_owns_retry_policy() -> None:
+    client_options: list[dict] = []
+
+    def factory(**kwargs):
+        client_options.append(kwargs)
+        return _SDKClient(_sdk_response('{"task_type": "policy_qa"}'))
+
+    client = OpenAICompatibleClient(
+        base_url="http://main.example/v1",
+        api_key="secret",
+        model="main-model",
+        client_factory=factory,
+    )
+
+    response = client.complete(_request())
+
+    assert response.status == "success"
+    assert client_options[0]["max_retries"] == 0
+
+
 def test_invalid_json_is_mapped_to_llm_invalid_output() -> None:
     client = OpenAICompatibleClient(
         base_url="http://main.example/v1",

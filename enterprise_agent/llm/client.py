@@ -69,6 +69,7 @@ class OpenAICompatibleClient(BaseLLMClient):
                     base_url=endpoint.base_url,
                     api_key=endpoint.api_key,
                     timeout=self.timeout,
+                    max_retries=0,
                 )
             except Exception as exc:
                 last_error = exc

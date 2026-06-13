@@ -7,6 +7,8 @@ from typing import Any, TypedDict
 
 class AgentState(TypedDict, total=False):
     task_id: str
+    user_id: str
+    thread_id: str
     query: str
     role: str
     task_type: str
@@ -25,5 +27,6 @@ class AgentState(TypedDict, total=False):
     prompt_version: str
     planner_source: str
     planner_reason: str
+    memory_context: dict[str, Any]
     trace_path: str
     latency: float

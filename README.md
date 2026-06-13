@@ -176,3 +176,36 @@ If an endpoint is unavailable or produces invalid planning output, the runtime
 falls back to the M4 path. Trace records include model, endpoint, token counts,
 latency, status, error type, and fallback state without storing prompts or API
 keys.
+
+## M6: Session Memory And Checkpoint
+
+M6 adds persistent multi-turn sessions isolated by `user_id + thread_id`.
+SQLite is the default local backend; PostgreSQL is available for deployment.
+The custom MemoryStore persists complete messages and incremental summaries,
+while the LangGraph Checkpointer persists graph execution state. The model only
+receives the summary and a recent window capped by 10 turns and the configured
+token limit.
+
+Run two turns in the same local session:
+
+```bash
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.app \
+  --query "帮我分析 A 项目风险" --role manager \
+  --user-id user-001 --thread-id project-a
+
+/mnt/sdc/zxuny/envs/agent-rag-demo-py310/bin/python -m enterprise_agent.app \
+  --query "第二个风险怎么处理？" --role manager \
+  --user-id user-001 --thread-id project-a
+```
+
+Manage sessions:
+
+```bash
+python -m enterprise_agent.memory.cli list --user-id user-001
+python -m enterprise_agent.memory.cli show --user-id user-001 --thread-id project-a
+python -m enterprise_agent.memory.cli delete --user-id user-001 --thread-id project-a --yes
+```
+
+When identifiers are omitted, the CLI generates and prints them. Production
+services must derive `user_id` from the authenticated identity rather than
+accepting an arbitrary client-supplied value.

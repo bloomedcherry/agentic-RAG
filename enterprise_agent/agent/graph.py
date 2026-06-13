@@ -11,6 +11,7 @@ from enterprise_agent.agent.planner import Planner
 from enterprise_agent.agent.router import Router
 from enterprise_agent.agent.state import AgentState
 from enterprise_agent.llm.base import BaseLLMClient
+from enterprise_agent.memory.manager import MemoryManager
 from enterprise_agent.tools.registry import ToolRegistry
 from enterprise_agent.tools.runtime_tools import extract_amount, extract_project_keyword
 
@@ -20,14 +21,35 @@ def build_graph(
     *,
     planner_llm_client: BaseLLMClient | None = None,
     answer_llm_client: BaseLLMClient | None = None,
+    memory_manager: MemoryManager | None = None,
+    checkpointer=None,
+    answer_max_tokens: int = 1024,
+    max_context_chars: int = 8000,
 ):
     planner = Planner(
         llm_client=planner_llm_client,
         tool_metadata_provider=registry.list_metadata,
     )
     router = Router()
-    context_builder = ContextBuilder()
-    answer_generator = AnswerGenerator(answer_llm_client)
+    context_builder = ContextBuilder(max_context_chars=max_context_chars)
+    answer_generator = AnswerGenerator(
+        answer_llm_client,
+        max_tokens=answer_max_tokens,
+    )
+
+    def memory_reader_node(state: AgentState) -> AgentState:
+        if memory_manager is None:
+            return state
+        try:
+            context = memory_manager.load_context(
+                state.get("user_id", ""),
+                state.get("thread_id", ""),
+            )
+        except Exception as exc:
+            errors = list(state.get("errors") or [])
+            errors.append({"type": "memory_read_error", "message": str(exc)})
+            return {**state, "errors": errors}
+        return {**state, "memory_context": _serializable_memory_context(context)}
 
     def planner_node(state: AgentState) -> AgentState:
         return planner.plan(state)
@@ -81,19 +103,54 @@ def build_graph(
         answer, metadata = answer_generator.generate(state)
         return {**state, "answer": answer, **metadata}
 
+    def memory_writer_node(state: AgentState) -> AgentState:
+        if memory_manager is None:
+            return state
+        try:
+            memory_manager.append_exchange(
+                state.get("user_id", ""),
+                state.get("thread_id", ""),
+                state.get("query", ""),
+                state.get("answer", ""),
+            )
+        except Exception as exc:
+            errors = list(state.get("errors") or [])
+            errors.append({"type": "memory_write_error", "message": str(exc)})
+            return {**state, "errors": errors}
+        return state
+
     graph = StateGraph(AgentState)
+    graph.add_node("memory_reader_node", memory_reader_node)
     graph.add_node("planner_node", planner_node)
     graph.add_node("router_node", router_node)
     graph.add_node("tool_executor_node", tool_executor_node)
     graph.add_node("context_builder_node", context_builder_node)
     graph.add_node("answer_generator_node", answer_generator_node)
-    graph.add_edge(START, "planner_node")
+    graph.add_node("memory_writer_node", memory_writer_node)
+    graph.add_edge(START, "memory_reader_node")
+    graph.add_edge("memory_reader_node", "planner_node")
     graph.add_edge("planner_node", "router_node")
     graph.add_edge("router_node", "tool_executor_node")
     graph.add_edge("tool_executor_node", "context_builder_node")
     graph.add_edge("context_builder_node", "answer_generator_node")
-    graph.add_edge("answer_generator_node", END)
-    return graph.compile()
+    graph.add_edge("answer_generator_node", "memory_writer_node")
+    graph.add_edge("memory_writer_node", END)
+    return graph.compile(checkpointer=checkpointer)
+
+
+def _serializable_memory_context(context: dict) -> dict:
+    result = dict(context)
+    result["recent_messages"] = [
+        {
+            "seq": message.seq,
+            "role": message.role,
+            "content": message.content,
+            "token_count": message.token_count,
+            "estimated": message.estimated,
+        }
+        for message in context.get("recent_messages") or []
+    ]
+    return result
 
 
 def _tool_args(tool_name: str, state: AgentState, tool_outputs: dict) -> dict:

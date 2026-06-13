@@ -16,6 +16,25 @@ def test_verifier_flags_missing_citation():
     assert result["suggested_action"] == "retry_with_citation"
 
 
+def test_verifier_accepts_explicit_source_files_from_session_memory():
+    result = verify(
+        {
+            "task_type": "policy_qa",
+            "retrieved_docs": [{"source": "policy_016.md", "chunk_id": "c1"}],
+            "answer": (
+                "# 回答说明\n\n"
+                "刚才引用的文件是 `report_008.md`、`report_020.md` 和 "
+                "`report_002.md`。"
+            ),
+            "tool_calls": [{"name": "search_kb", "status": "success"}],
+        }
+    )
+
+    assert result["pass"] is True
+    assert result["issues"] == []
+    assert result["suggested_action"] == "none"
+
+
 def test_verifier_flags_empty_retrieval_for_rag_tasks():
     result = verify(
         {
